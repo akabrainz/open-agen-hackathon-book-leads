@@ -1,35 +1,158 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Book Inventory Leads — Reasoning Architecture</title>
-<style>body{font-family:system-ui,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem}label{display:block;margin:.5rem 0}input{padding:.4rem}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.4rem;text-align:left}details{margin:.3rem 0}.warn{background:#fff3cd;padding:.7rem;border:1px solid #e6c200}.rec{color:#0a6b2a}.bad{color:#a00}</style>
-</head><body>
-<h1>Book Inventory Leads</h1>
-<p>For an independent book reseller: <b>what to stock, at what price, for what margin?</b> Reasoning Architecture track, Open Agent Hackathon 2026.</p>
-<div id="status"></div>
-<form id="f">
-<label>Search query <input name="query" value="bestselling fiction" size="40"></label>
-<label>Top N <input name="topN" type="number" value="10" min="1" max="25"></label>
-<label>Duration (days, for price trend) <input name="days" type="number" value="7" min="1" max="30"></label>
-<label>Purchase cost (leave blank = estimated 55% of median) <input name="purchaseCost" type="number" step="0.01"></label>
-<label>Shipping <input name="shippingCost" type="number" step="0.01" value="3.99"></label>
-<label>Fee % <input name="feePercent" type="number" step="0.01" value="0.12"></label>
-<label>Target margin % <input name="margin" type="number" step="0.01" value="0.20"></label>
-<label><input type="checkbox" name="sample" checked> SAMPLE_MODE (labelled sample data, no live prices)</label>
-<button type="submit">Generate leads</button>
-</form>
-<div id="out"></div>
-<script>
-async function status(){const s=await (await fetch('/api/status')).json();
- document.getElementById('status').innerHTML=`<p><b>Data:</b> ${s.dataBackend} | <b>Reasoning:</b> ${s.reasoningProvider}</p>`;}
-status();
-document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
- const d=new FormData(e.target); const body={query:d.get('query'),topN:+d.get('topN'),days:+d.get('days'),sampleMode:d.get('sample')==='on',
-  cost:{shippingCost:+d.get('shippingCost'),feePercent:+d.get('feePercent'),targetMarginPercent:+d.get('margin')}};
- const pc=d.get('purchaseCost'); if(pc) body.cost.purchaseCost=+pc;
- const out=document.getElementById('out'); out.textContent='Generating…';
- const r=await fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
- let html=(r.warnings||[]).map(w=>`<div class="warn">${w}</div>`).join('')+`<p>Backend: ${r.dataBackend} | Provider: ${r.reasoningProvider} | Sample mode: ${r.sampleMode}</p><table><tr><th>#</th><th>Book</th><th>Median</th><th>Demand</th><th>Trend</th><th>Recommended</th><th>Status</th><th>Confidence</th></tr>`;
- r.leads.forEach((l,i)=>{html+=`<tr><td>${i+1}</td><td><b>${l.title}</b><br>${(l.authors||[]).join(', ')}<br><small>${(l.genres||[]).join(', ')}</small><details><summary>Trace &amp; explanation</summary><p>${l.explanation}</p><p><i>${l.whatWouldChangeIt}</i></p><ul>${(l.trace||[]).map(t=>`<li>${t}</li>`).join('')}</ul></details></td><td>${l.competitorMedian??'—'}</td><td>${l.demandScore}</td><td>${l.trendPercent}% (${l.trendDataPoints} pts)</td><td><b>${l.recommendedPrice??'—'}</b></td><td class="${l.status==='Recommend'?'rec':l.status==='DoNotStock'?'bad':''}">${l.status}</td><td>${l.confidence}%</td></tr>`;});
- out.innerHTML=html+'</table>';
-});
-</script></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Book Inventory Leads by The Agentic Duo — for an independent book reseller: what to stock, at what price, for what margin?">
+<title>Book Inventory Leads — The Agentic Duo</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#results">Skip to results</a>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">AD</span>
+      <span class="brand-text">
+        <span class="brand-name">Agentic Duo</span>
+        <span class="brand-tag">Open Agent Hackathon 2026</span>
+      </span>
+    </div>
+    <nav class="header-meta" aria-label="Project">
+      <span class="pill">Reasoning Architecture</span>
+      <span class="pill pill-outline">C# / .NET</span>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero" aria-labelledby="hero-title">
+    <p class="eyebrow">Book Inventory Leads</p>
+    <h1 id="hero-title">What to stock, at what price, for what margin?</h1>
+    <p class="hero-lead">For an independent book reseller. Discover books, compare the market, and get a ranked, explainable price recommendation — not just a top-10 list.</p>
+    <ol class="flow" aria-label="How it works">
+      <li><strong>1. Search</strong><span>Find books</span></li>
+      <li><strong>2. Enrich</strong><span>Author, reviews, price, popularity, genre</span></li>
+      <li><strong>3. Compare</strong><span>Competitive price from the market</span></li>
+      <li><strong>4. Recommend</strong><span>Sales price after competitor price &amp; costs</span></li>
+    </ol>
+  </section>
+
+  <section class="status-bar" aria-live="polite" aria-label="Integration status">
+    <div>
+      <span class="status-label">Data layer</span>
+      <strong id="status-data">Loading…</strong>
+    </div>
+    <div>
+      <span class="status-label">Reasoning provider</span>
+      <strong id="status-reasoning">Loading…</strong>
+    </div>
+    <div>
+      <span class="status-label">Sample mode (env)</span>
+      <strong id="status-sample-env">—</strong>
+    </div>
+    <p id="status-note" class="status-note">SQLite fallback is NOT Zetaris; local fallback is NOT Nightshift / NVIDIA. Sample data is always labelled sample. No sold-copies data is claimed.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="controls-title">
+    <h2 id="controls-title">Find inventory leads</h2>
+    <form id="lead-form">
+      <fieldset>
+        <legend>Search</legend>
+        <div class="field field-wide">
+          <label for="query">Search query</label>
+          <input id="query" name="query" type="text" value="bestselling fiction" autocomplete="off" required>
+          <p class="hint">Try “science fiction”, “history”, or an author or title.</p>
+        </div>
+        <div class="field">
+          <label for="topN">Top N books</label>
+          <input id="topN" name="topN" type="number" value="10" min="1" max="25" step="1">
+          <p class="hint">1–25 leads.</p>
+        </div>
+        <div class="field">
+          <label for="days">Duration — days for price trend</label>
+          <input id="days" name="days" type="number" value="7" min="1" max="30" step="1">
+          <p class="hint">1–30 days of price history.</p>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Cost model</legend>
+        <div class="field">
+          <label for="purchaseCost">Purchase cost ($) <span class="optional">optional</span></label>
+          <input id="purchaseCost" name="purchaseCost" type="number" step="0.01" min="0" placeholder="Leave blank to estimate">
+          <p class="hint">Blank = estimated at 55% of the competitor median, flagged in the result.</p>
+        </div>
+        <div class="field">
+          <label for="shippingCost">Shipping per unit ($)</label>
+          <input id="shippingCost" name="shippingCost" type="number" step="0.01" min="0" value="3.99" required>
+        </div>
+        <div class="field">
+          <label for="feePercent">Marketplace fee (%)</label>
+          <input id="feePercent" name="feePercent" type="number" step="0.1" min="0" max="100" value="12" required>
+        </div>
+        <div class="field">
+          <label for="margin">Target margin (%)</label>
+          <input id="margin" name="margin" type="number" step="0.1" min="0" max="100" value="20" required>
+        </div>
+      </fieldset>
+
+      <div class="form-foot">
+        <label class="switch-row" for="sampleMode">
+          <input id="sampleMode" name="sampleMode" type="checkbox" checked>
+          <span><strong>Sample mode</strong><br><span class="hint">Use labelled sample data, with no live prices. Turn off for live public-API discovery.</span></span>
+        </label>
+        <div class="actions">
+          <button class="btn-primary" type="submit" id="run-btn">Generate leads</button>
+          <button class="btn-secondary" type="button" id="reset-btn">Reset</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="presets" aria-label="Sample searches">
+      <span class="presets-label">Quick samples:</span>
+      <div id="preset-buttons" class="preset-buttons" role="group" aria-label="Sample searches"></div>
+    </div>
+  </section>
+
+  <section id="results" aria-live="polite" aria-label="Results">
+    <div id="results-summary" class="results-summary" hidden></div>
+    <div id="warnings" class="warnings" hidden></div>
+    <div id="error" class="error" role="alert" hidden></div>
+
+    <div id="empty-state" class="empty-state">
+      <h2>Start with a search above</h2>
+      <p>Your ranked leads will appear here, each with its recommended price, decision, confidence, cost breakdown, and a trace showing why that price was chosen — and what would change it.</p>
+      <p class="hint">Tip: keep Sample mode on for a fast, reliable demo. Turn it off to try live discovery from public book APIs.</p>
+    </div>
+
+    <div id="loading" class="loading" hidden aria-label="Loading leads">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>Generating leads… comparing competitor prices and applying your cost model.</p>
+    </div>
+
+    <div id="leads" class="leads-grid"></div>
+    <p id="no-results" class="empty-state" hidden>No leads were returned for that search. Try a broader query, a different genre, or Sample mode.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div>
+      <p class="footer-brand">Agentic Duo</p>
+      <p>Book Inventory Leads — Open Agent Hackathon 2026, Reasoning Architecture track.</p>
+    </div>
+    <div>
+      <p><strong>Team</strong><br>Ankit Srivastava &amp; Taroona Sharma</p>
+      <p class="hint">The Agentic Duo</p>
+    </div>
+    <div>
+      <p><strong>Honesty note</strong><br>Sample data is labelled sample. SQLite is not Zetaris and the local explanation is not Nightshift / NVIDIA when fallbacks run. No sold-copies data is claimed — popularity is approximated from rating, ratings count, and price trend.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>
