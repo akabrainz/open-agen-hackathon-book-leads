@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Book Inventory Leads — Reasoning Architecture</title>
+<style>body{font-family:system-ui,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem}label{display:block;margin:.5rem 0}input{padding:.4rem}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.4rem;text-align:left}details{margin:.3rem 0}.warn{background:#fff3cd;padding:.7rem;border:1px solid #e6c200}.rec{color:#0a6b2a}.bad{color:#a00}</style>
+</head><body>
+<h1>Book Inventory Leads</h1>
+<p>For an independent book reseller: <b>what to stock, at what price, for what margin?</b> Reasoning Architecture track, Open Agent Hackathon 2026.</p>
+<div id="status"></div>
+<form id="f">
+<label>Search query <input name="query" value="bestselling fiction" size="40"></label>
+<label>Top N <input name="topN" type="number" value="10" min="1" max="25"></label>
+<label>Duration (days, for price trend) <input name="days" type="number" value="7" min="1" max="30"></label>
+<label>Purchase cost (leave blank = estimated 55% of median) <input name="purchaseCost" type="number" step="0.01"></label>
+<label>Shipping <input name="shippingCost" type="number" step="0.01" value="3.99"></label>
+<label>Fee % <input name="feePercent" type="number" step="0.01" value="0.12"></label>
+<label>Target margin % <input name="margin" type="number" step="0.01" value="0.20"></label>
+<label><input type="checkbox" name="sample" checked> SAMPLE_MODE (labelled sample data, no live prices)</label>
+<button type="submit">Generate leads</button>
+</form>
+<div id="out"></div>
+<script>
+async function status(){const s=await (await fetch('/api/status')).json();
+ document.getElementById('status').innerHTML=`<p><b>Data:</b> ${s.dataBackend} | <b>Reasoning:</b> ${s.reasoningProvider}</p>`;}
+status();
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();
+ const d=new FormData(e.target); const body={query:d.get('query'),topN:+d.get('topN'),days:+d.get('days'),sampleMode:d.get('sample')==='on',
+  cost:{shippingCost:+d.get('shippingCost'),feePercent:+d.get('feePercent'),targetMarginPercent:+d.get('margin')}};
+ const pc=d.get('purchaseCost'); if(pc) body.cost.purchaseCost=+pc;
+ const out=document.getElementById('out'); out.textContent='Generating…';
+ const r=await fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+ let html=(r.warnings||[]).map(w=>`<div class="warn">${w}</div>`).join('')+`<p>Backend: ${r.dataBackend} | Provider: ${r.reasoningProvider} | Sample mode: ${r.sampleMode}</p><table><tr><th>#</th><th>Book</th><th>Median</th><th>Demand</th><th>Trend</th><th>Recommended</th><th>Status</th><th>Confidence</th></tr>`;
+ r.leads.forEach((l,i)=>{html+=`<tr><td>${i+1}</td><td><b>${l.title}</b><br>${(l.authors||[]).join(', ')}<br><small>${(l.genres||[]).join(', ')}</small><details><summary>Trace &amp; explanation</summary><p>${l.explanation}</p><p><i>${l.whatWouldChangeIt}</i></p><ul>${(l.trace||[]).map(t=>`<li>${t}</li>`).join('')}</ul></details></td><td>${l.competitorMedian??'—'}</td><td>${l.demandScore}</td><td>${l.trendPercent}% (${l.trendDataPoints} pts)</td><td><b>${l.recommendedPrice??'—'}</b></td><td class="${l.status==='Recommend'?'rec':l.status==='DoNotStock'?'bad':''}">${l.status}</td><td>${l.confidence}%</td></tr>`;});
+ out.innerHTML=html+'</table>';
+});
+</script></body></html>
