@@ -1,5 +1,29 @@
 using BookInventoryLeads.Core;
 
+// Load .env (local only, never committed) into process env if not already set.
+// .NET does not auto-load .env files, so without this a repo-root .env is ignored.
+// Candidates cover running from the repo root (dotnet run from there, or VS Code
+// with repo root as working directory) and running from the Api project folder
+// (bin/Debug/net8.0 is 5 levels below the repo root).
+foreach (var candidate in new[]
+{
+    Path.Combine(Directory.GetCurrentDirectory(), ".env"),
+    Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".env"),
+})
+{
+    if (!File.Exists(candidate)) continue;
+    foreach (var line in File.ReadAllLines(candidate))
+    {
+        var t = line.Trim();
+        if (t.Length == 0 || t.StartsWith("#") || !t.Contains('=')) continue;
+        var kv = t.Split('=', 2);
+        var key = kv[0].Trim();
+        var value = kv[1].Trim().Trim('"').Trim('\'');
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key)))
+            Environment.SetEnvironmentVariable(key, value);
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton(new HttpClient { Timeout = TimeSpan.FromSeconds(20) });
 builder.Services.AddSingleton(sp => new PriceHistoryStore(AppConfig.SqlitePath));
